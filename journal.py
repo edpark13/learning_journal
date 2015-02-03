@@ -44,7 +44,7 @@ def main():
     settings['reload_all'] = os.environ.get('DEBUG', True)
     settings['debug_all'] = os.environ.get('DEBUG', True)
     settings['db'] = os.environ.get(
-    'DATABASE_URL', 'dbname=learning_journal user=cewing'
+    'DATABASE_URL', 'dbname=learning_journal user=edward'
     )
     # secret value for session signing:
     secret = os.environ.get('JOURNAL_SESSION_SECRET', 'itsaseekrit')
