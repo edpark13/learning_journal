@@ -10,7 +10,6 @@ from pyramid.session import SignedCookieSessionFactory
 from pyramid.view import view_config
 from waitress import serve
 from pyramid.events import NewRequest, subscriber
-import transaction
 
 # add this just below the SQL table definition we just created
 logging.basicConfig()
