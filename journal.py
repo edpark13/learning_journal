@@ -10,6 +10,7 @@ from pyramid.session import SignedCookieSessionFactory
 from pyramid.view import view_config
 from waitress import serve
 from pyramid.events import NewRequest, subscriber
+import datetime
 
 # add this just below the SQL table definition we just created
 logging.basicConfig()
@@ -19,6 +20,13 @@ log = logging.getLogger(__file__)
 @view_config(route_name='home', renderer='string')
 def home(request):
     return "Hello World"
+
+def write_entry(request):
+    """write a single entry to the database"""
+    title = request.params.get('title', None)
+    text = request.params.get('text', None)
+    created = datetime.datetime.utcnow()
+    request.db.cursor().execute(INSERT_ENTRY, [title, text, created])
 
 # add this function before the "main" function
 def connect_db(settings):
@@ -94,4 +102,8 @@ CREATE TABLE IF NOT EXISTS entries (
     text TEXT NOT NULL,
     created TIMESTAMP NOT NULL
 )
+"""
+
+INSERT_ENTRY = """
+INSERT INTO entries (title, text, created) VALUES (%s, %s, %s)
 """
