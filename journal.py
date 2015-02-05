@@ -12,6 +12,7 @@ from waitress import serve
 from pyramid.events import NewRequest, subscriber
 import datetime
 
+
 # add this just below the SQL table definition we just created
 logging.basicConfig()
 log = logging.getLogger(__file__)
@@ -27,6 +28,18 @@ def write_entry(request):
     text = request.params.get('text', None)
     created = datetime.datetime.utcnow()
     request.db.cursor().execute(INSERT_ENTRY, [title, text, created])
+
+DB_ENTRIES_LIST = """
+SELECT id, title, text, created FROM entries ORDER BY created DESC
+"""
+
+def read_entries(request):
+    """return a list of all entries as dicts"""
+    cursor = request.db.cursor()
+    cursor.execute(SELECT_ENTRIES)
+    keys = ('id', 'title', 'text', 'created')
+    entries = [dict(zip(keys, row)) for row in cursor.fetchall()]
+    return {'entries': entries}
 
 # add this function before the "main" function
 def connect_db(settings):
