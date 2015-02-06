@@ -13,6 +13,22 @@ from pyramid.events import NewRequest, subscriber
 import datetime
 from pyramid.httpexceptions import HTTPFound, HTTPInternalServerError
 
+DB_SCHEMA = """
+CREATE TABLE IF NOT EXISTS entries (
+    id serial PRIMARY KEY,
+    title VARCHAR (127) NOT NULL,
+    text TEXT NOT NULL,
+    created TIMESTAMP NOT NULL
+)
+"""
+
+INSERT_ENTRY = """
+INSERT INTO entries (title, text, created) VALUES (%s, %s, %s)
+"""
+
+DB_ENTRIES_LIST = """
+SELECT id, title, text, created FROM entries ORDER BY created DESC
+"""
 
 # add this just below the SQL table definition we just created
 logging.basicConfig()
@@ -117,20 +133,3 @@ if __name__ == '__main__':
     app = main()
     port = os.environ.get('PORT', 5000)
     serve(app, host='0.0.0.0', port=port)
-
-DB_SCHEMA = """
-CREATE TABLE IF NOT EXISTS entries (
-    id serial PRIMARY KEY,
-    title VARCHAR (127) NOT NULL,
-    text TEXT NOT NULL,
-    created TIMESTAMP NOT NULL
-)
-"""
-
-INSERT_ENTRY = """
-INSERT INTO entries (title, text, created) VALUES (%s, %s, %s)
-"""
-
-DB_ENTRIES_LIST = """
-SELECT id, title, text, created FROM entries ORDER BY created DESC
-"""
