@@ -12,6 +12,8 @@ from waitress import serve
 from pyramid.events import NewRequest, subscriber
 import datetime
 from pyramid.httpexceptions import HTTPFound, HTTPInternalServerError
+from pyramid.authentication import AuthTktAuthenticationPolicy
+from pyramid.authorization import ACLAuthorizationPolicy
 
 DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS entries (
@@ -114,13 +116,22 @@ def main():
     settings['db'] = os.environ.get(
     'DATABASE_URL', 'dbname=learning_journal user=edward'
     )
+    # authorization authencation
+    settings['auth.username'] = os.environ.get('AUTH_USERNAME', 'admin')
+    settings['auth.password'] = os.environ.get('AUTH_PASSWORD', 'secret')
     # secret value for session signing:
     secret = os.environ.get('JOURNAL_SESSION_SECRET', 'itsaseekrit')
     session_factory = SignedCookieSessionFactory(secret)
+    auth_secret = os.environ.get('JOURNAL_AUTH_SECRET', 'anotherseekrit')
     # configuration setup
     config = Configurator(
         settings=settings,
-        session_factory=session_factory
+        session_factory=session_factory,
+        authentication_policy=AuthTktAuthenticationPolicy(
+            secret=auth_secret,
+            hashalg='sha512'
+        ),
+        authorization_policy=ACLAuthorizationPolicy(),
     )
     config.include('pyramid_jinja2')
     config.add_route('home', '/')
@@ -128,6 +139,18 @@ def main():
     config.scan()
     app = config.make_wsgi_app()
     return app
+
+def do_login(request):
+    username = request.params.get('username', None)
+    password = request.params.get('password', None)
+    if not (username and password):
+        raise ValueError('both username and password are required')
+
+    settings = request.registry.settings
+    if username == settings.get('auth.username', ''):
+        if password == settings.get('auth.password', ''):
+            return True
+    return False
 
 if __name__ == '__main__':
     app = main()
