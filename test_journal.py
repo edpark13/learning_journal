@@ -6,6 +6,7 @@ from journal import connect_db
 from journal import DB_SCHEMA
 import datetime
 from journal import INSERT_ENTRY
+from cryptacular.bcrypt import BCRYPTPasswordManager
 
 
 TEST_DSN = 'dbname=test user=edward'
@@ -164,9 +165,10 @@ def test_post_to_add_view(app):
 
 @pytest.fixture(scope='function')
 def auth_req(request):
+    manager = BCRYPTPasswordManager()
     settings = {
         'auth.username': 'admin',
-        'auth.password': 'secret',
+        'auth.password': manager.encode('secret'),
     }
     testing.setUp(settings=settings)
     req = testing.DummyRequest()

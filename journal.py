@@ -14,6 +14,7 @@ import datetime
 from pyramid.httpexceptions import HTTPFound, HTTPInternalServerError
 from pyramid.authentication import AuthTktAuthenticationPolicy
 from pyramid.authorization import ACLAuthorizationPolicy
+from cryptacular.bcrypt import BCRYPTPasswordManager
 
 DB_SCHEMA = """
 CREATE TABLE IF NOT EXISTS entries (
@@ -116,9 +117,12 @@ def main():
     settings['db'] = os.environ.get(
     'DATABASE_URL', 'dbname=learning_journal user=edward'
     )
-    # authorization authencation
+    # authorization authentication
     settings['auth.username'] = os.environ.get('AUTH_USERNAME', 'admin')
-    settings['auth.password'] = os.environ.get('AUTH_PASSWORD', 'secret')
+    manager = BCRYPTPasswordManager()
+    settings['auth.password'] = os.environ.get(
+        'AUTH_PASSWORD', manager.encode('secret')
+    )
     # secret value for session signing:
     secret = os.environ.get('JOURNAL_SESSION_SECRET', 'itsaseekrit')
     session_factory = SignedCookieSessionFactory(secret)
@@ -147,10 +151,10 @@ def do_login(request):
         raise ValueError('both username and password are required')
 
     settings = request.registry.settings
+    manager = BCRYPTPasswordManager()
     if username == settings.get('auth.username', ''):
-        if password == settings.get('auth.password', ''):
-            return True
-    return False
+        hashed = settings.get('auth.password', '')
+        return manager.check(hashed, password)
 
 if __name__ == '__main__':
     app = main()
