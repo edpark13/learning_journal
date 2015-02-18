@@ -177,7 +177,7 @@ def get_newest_entry(request):
     entry = dict(zip(keys, cursor.fetchone()))
     entry['text'] = mdown(entry['text'])
     entry['created'] = entry['created'].strftime('%b %d, %Y')
-    return {'entry': entry}
+    return entry
 
 def get_single_entry(request, mark_down=False):
     """get single entry - returns markdown if mark_down set to True"""
