@@ -8,8 +8,9 @@ $(document).ready( function() {
         //     alert( "success" );
         // })
         $.ajax({
-            url: "add",
+            url : "add",
             type : "POST",
+            dataType : "json"
             data : { 
             'title' : title, 
             'text' : text },
