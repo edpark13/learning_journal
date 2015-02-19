@@ -1,17 +1,39 @@
 <!DOCTYPE html>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script src="/static/edit.js" type="text/javascript"></script>
 {% extends "base.jinja2" %}
 {% block body %}
+  {% if request.authenticated_userid %}
+  <div id="edit_form">
+  <h2>Edit</h2>
+      <aside>
+      <form action="" method="POST" class="edit_entry">
+        <div class="field">
+          <label for="title">Title</label>
+          <input type="text" size="30" name="title" id="title"/>
+        </div>
+        <div class="field">
+          <label for="text">Text</label>
+          <textarea name="text" id="text" rows="5" cols="80" ></textarea>
+        </div>
+        <div class="control_row">
+          <input type="submit" value="Share" name="Share"/>
+        </div>
+      </form>
+      </aside>
+  </div>
+  {% endif %}
+  <div id='entry'>
   <h2>Detailed Entry</h2>
-  <article class="entry" id="entry={{entry.id}}">
+  <article class="single_entry" id="{{entry.id}}">
     <h3>{{ entry.title }}</h3>
     <p class="dateline">{{ entry.created.strftime('%b. %d, %Y') }}
     <div class="entry_body">
       {{ entry.text|safe }}
     </div>
     {% if request.authenticated_userid %}
-      <a href="{{request.route_url('edit', id=entry.id)}}">
-        <button type="button">Edit</button>
-      </a>
+        <button type="button" id='edit'>Edit</button>
     {% endif %}
   </article>
+  </div>
 {% endblock %}

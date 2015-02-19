@@ -1,4 +1,5 @@
 $(document).ready( function() {
+
     $('#add_entry').submit( function(event) {
         event.preventDefault();
         var title = $('input[name=title]').val();
@@ -25,21 +26,5 @@ $(document).ready( function() {
             id.append(title, date, text, link_button, edit_button);
             $('#entries').prepend(id);
         })
-    });
+    });    
 });
-
-// <article class="entry" id="entry={{entry.id}}">
-//       <h3>{{ entry.title }}</h3>
-//       <p class="dateline">{{ entry.created.strftime('%b. %d, %Y') }}
-//       <div class="entry_body">
-//         {{ entry.text|markdown|safe }}
-//       </div>
-//       <a href ="{{request.route_url('detail', id=entry.id)}}">
-//         <button type="button">permalink</button>
-//       </a>
-//       {% if request.authenticated_userid %}
-//         <a href ="{{request.route_url('edit', id=entry.id)}}">
-//           <button type="button">edit</button>
-//         </a>
-//       {% endif %}
-//     </article>
