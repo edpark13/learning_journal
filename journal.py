@@ -5,10 +5,11 @@ import logging
 import datetime
 import markdown
 import jinja2
+import json
 from pyramid.config import Configurator
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.view import view_config
-from pyramid.events import NewRequest, subscriber
+# from pyramid.events import NewRequest, subscriber
 from waitress import serve
 from contextlib import closing
 from pyramid.httpexceptions import HTTPFound, HTTPInternalServerError, HTTPForbidden
@@ -16,6 +17,15 @@ from pyramid.authentication import AuthTktAuthenticationPolicy
 from pyramid.authorization import ACLAuthorizationPolicy
 from cryptacular.bcrypt import BCRYPTPasswordManager
 from pyramid.security import remember, forget
+import sqlalchemy as sa
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import (
+    scoped_session,
+    sessionmaker,
+    )
+from waitress import serve
+from zope.sqlalchemy import ZopeTransactionExtension
+
 
 here = os.path.dirname(os.path.abspath(__file__))
 
@@ -47,54 +57,95 @@ SELECT_SINGLE_NEWEST_ENTRY = """
 SELECT * FROM entries ORDER BY created DESC LIMIT 1 
 """
 
+DBSession = scoped_session(sessionmaker(extension=ZopeTransactionExtension()))
+Base = declarative_base()
+
+
+class Entry(Base):
+    __tablename__ = 'entries'
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    title = sa.Column(sa.Unicode(127), nullable=False)
+    text = sa.Column(sa.UnicodeText, nullable=False)
+    created = sa.Column(
+        sa.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    def __repr__(self):
+        return u"{}: {}".format(self.__class__.__name__, self.title)
+
+    @classmethod
+    def all(cls):
+        return DBSession.query(cls).order_by(cls.created.desc()).all()
+
+    @classmethod
+    def by_id(cls, id):
+        return DBSession.query(cls).filter(cls.id==id).one()
+
+    @classmethod
+    def from_request(cls, request):
+        title = request.params.get('title', None)
+        text = request.params.get('text', None)
+        created = datetime.datetime.utcnow()
+        new_entry = cls(title=title, text=text, created=created)
+        DBSession.add(new_entry)
+
+    @classmethod
+    def get_newest(cls):
+        return DBSession.query(cls).order_by(cls.created.desc()).first()
+
 logging.basicConfig()
 log = logging.getLogger(__file__)
 
+def to_json(entry):
+        return dict(id = entry.id,
+                    title = entry.title,
+                    text = entry.text,
+                    created = entry.created)
 
 def mdown(text):
     return markdown.markdown(text, extensions=['codehilite', 'fenced_code'])
 
 
-def connect_db(settings):
-    """Return a connection to the configured database"""
-    return psycopg2.connect(settings['db'])
+# def connect_db(settings):
+#     """Return a connection to the configured database"""
+#     return psycopg2.connect(settings['db'])
 
 
-def init_db():
-    """Create database dables defined by DB_SCHEMA
+# def init_db():
+#     """Create database dables defined by DB_SCHEMA
 
-    Warning: This function will not update existing table definitions
-    """
-    settings = {}
-    settings['db'] = os.environ.get(
-        'DATABASE_URL', 'dbname=learning_journal user=edward'
-    )
-    with closing(connect_db(settings)) as db:
-        db.cursor().execute(DB_SCHEMA)
-        db.commit()
-
-
-@subscriber(NewRequest)
-def open_connection(event):
-    request = event.request
-    settings = request.registry.settings
-    request.db = connect_db(settings)
-    request.add_finished_callback(close_connection)
+#     Warning: This function will not update existing table definitions
+#     """
+#     settings = {}
+#     settings['db'] = os.environ.get(
+#         'DATABASE_URL', 'dbname=learning_journal user=edward'
+#     )
+#     with closing(connect_db(settings)) as db:
+#         db.cursor().execute(DB_SCHEMA)
+#         db.commit()
 
 
-def close_connection(request):
-    """close the database connection for this request
+# @subscriber(NewRequest)
+# def open_connection(event):
+#     request = event.request
+#     settings = request.registry.settings
+#     request.db = connect_db(settings)
+#     request.add_finished_callback(close_connection)
 
-    If there has been an error in the processing of the request, abort any
-    open transactions.
-    """
-    db = getattr(request, 'db', None)
-    if db is not None:
-        if request.exception is not None:
-            db.rollback()
-        else:
-            db.commit()
-        request.db.close()
+
+# def close_connection(request):
+#     """close the database connection for this request
+
+#     If there has been an error in the processing of the request, abort any
+#     open transactions.
+#     """
+#     db = getattr(request, 'db', None)
+#     if db is not None:
+#         if request.exception is not None:
+#             db.rollback()
+#         else:
+#             db.commit()
+#         request.db.close()
 
 
 def update_entry(request, id):
@@ -104,12 +155,12 @@ def update_entry(request, id):
     request.db.cursor().execute(UPDATE_ENTRY, [title, text, id])
 
 
-def write_entry(request):
-    """ add a new entry to the database"""
-    title = request.params.get('title', None)
-    text = request.params.get('text', None)
-    created = datetime.datetime.utcnow()
-    request.db.cursor().execute(INSERT_ENTRY, [title, text, created])
+# def write_entry(request):
+#     """ add a new entry to the database"""
+#     title = request.params.get('title', None)
+#     text = request.params.get('text', None)
+#     created = datetime.datetime.utcnow()
+#     request.db.cursor().execute(INSERT_ENTRY, [title, text, created])
 
 
 @view_config(route_name='add', renderer='json')
@@ -117,7 +168,9 @@ def add_entry(request):
     if request.authenticated_userid:
         if request.method == 'POST':
             try:
-                write_entry(request)
+                Entry.from_request(request)
+            # This error type needs to be updated since it will now be an SQLA error
+            # type.
             except psycopg2.Error:
                 # this will catch any errors generated by the database
                 return HTTPInternalServerError
@@ -129,12 +182,9 @@ def add_entry(request):
 @view_config(route_name='home', renderer='templates/list.jinja2')
 def read_entries(request):
     """return a list of all entries as dicts"""
-    cursor = request.db.cursor()
-    cursor.execute(DB_ENTRIES_LIST)
-    keys = ('id', 'title', 'text', 'created')
-    entries = [dict(zip(keys, row)) for row in cursor.fetchall()]
+    entries = Entry.all()
     for entry in entries:
-        entry['text'] = mdown(entry['text'])
+        entry.text = mdown(entry.text)
     return {'entries': entries}
 
 
@@ -158,7 +208,6 @@ def edit(request):
     return entry
 
 
-
 # DETAIL PAGE
 @view_config(route_name='detail', renderer='templates/detail.jinja2')
 def detail_view(request):
@@ -167,23 +216,25 @@ def detail_view(request):
     return get_single_entry(request, True, False, id)
 
 def get_newest_entry(request):
-    cursor = request.db.cursor()
-    cursor.execute(SELECT_SINGLE_NEWEST_ENTRY)
-    keys = ('id', 'title', 'text', 'created')
-    entry = dict(zip(keys, cursor.fetchone()))
-    entry['text'] = mdown(entry['text'])
-    entry['created'] = entry['created'].strftime('%b %d, %Y')
-    return entry
+    entry = Entry.get_newest()
+    # cursor = request.db.cursor()
+    # cursor.execute(SELECT_SINGLE_NEWEST_ENTRY)
+    # keys = ('id', 'title', 'text', 'created')
+    # entry = dict(zip(keys, cursor.fetchone()))
+    entry.text = mdown(entry.text)
+    entry.created = entry.created.strftime('%b %d, %Y')
+    return to_json(entry)
 
 def get_single_entry(request, mark_down, json, id):
     """get single entry - returns markdown if mark_down set to True"""
     # id = request.matchdict.get('id', -1)
-    cursor = request.db.cursor()
-    cursor.execute(SELECT_SINGLE_ENTRY, (id,))
-    keys = ('id', 'title', 'text', 'created')
-    entry = dict(zip(keys, cursor.fetchone()))
+    # cursor = request.db.cursor()
+    # cursor.execute(SELECT_SINGLE_ENTRY, (id,))
+    # keys = ('id', 'title', 'text', 'created')
+    # entry = dict(zip(keys, cursor.fetchone()))
+    entry = Entry.by_id(id)
     if mark_down:
-        entry['text'] = mdown(entry['text'])
+        entry.text = mdown(entry.text)
     if json:
         return entry
     return {'entry': entry}
@@ -234,9 +285,15 @@ def main():
     settings = {}
     settings['reload_all'] = os.environ.get('DEBUG', True)
     settings['debug_all'] = os.environ.get('DEBUG', True)
-    settings['db'] = os.environ.get(
-        'DATABASE_URL', 'dbname=learning_journal user=edward'
+    # settings['db'] = os.environ.get(
+    #     'DATABASE_URL', 'dbname=learning_journal user=edward'
+    # )
+    settings['sqlalchemy.url'] = os.environ.get(
+        ### FIX THE DB URL FORMAT, MUST BE rfc1738 URL
+        'DATABASE_URL', 'postgresql://edward:@/learning_journal'
     )
+    engine = sa.engine_from_config(settings, 'sqlalchemy.')
+    DBSession.configure(bind=engine)
     settings['auth.username'] = os.environ.get('AUTH_USERNAME', 'admin')
     manager = BCRYPTPasswordManager()
     settings['auth.password'] = os.environ.get(
@@ -257,6 +314,7 @@ def main():
         ),
         authorization_policy=ACLAuthorizationPolicy(),
     )
+    config.include('pyramid_tm')
     config.include('pyramid_jinja2')
     config.add_static_view('static', os.path.join(here, 'static'))
     config.add_route('home', '/')
