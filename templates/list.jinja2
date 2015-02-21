@@ -34,9 +34,9 @@
         <button type="button">permalink</button>
       </a>
       {% if request.authenticated_userid %}
-        <a href ="{{request.route_url('edit', id=entry.id)}}">
+<!--         <a href ="{{request.route_url('edit', id=entry.id)}}">
           <button type="button">edit</button>
-        </a>
+        </a> -->
       {% endif %}
     </article>
     {% else %}
